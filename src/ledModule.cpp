@@ -3,6 +3,7 @@
 #include "CustomType.hpp"
 #include "freertos/freertos.h"
 #include "freertos/task.h"
+#include "Simplex.h"
 
 LedModule::LedModule(gpio_num_t ledPin, uint16_t numLed)
 {
@@ -137,6 +138,110 @@ void    LedModule::Update()
                             fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
                         else if ((*i)->fMonoFore)
                             fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
+                    }
+                }
+                break;
+            
+            case TRANSITION_TYPE_FADING:
+                if ((*i)->fBicolor)
+                {
+                    RGB color;
+                    RGB foreColor = (*i)->fForeColor;
+                    RGB backColor = (*i)->fBackColor;
+                    uint8_t rate = (*i)->fTransitionRate;
+                    uint8_t invRate = 255 - rate;
+
+                    color.r = ((foreColor.r * rate) >> 8) + ((backColor.r * invRate) >> 8);
+                    color.g = ((foreColor.g * rate) >> 8) + ((backColor.g * invRate) >> 8);
+                    color.b = ((foreColor.b * rate) >> 8) + ((backColor.b * invRate) >> 8);
+
+                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                        fLedData[ledIndex + (*i)->fStartIndex] = color;
+                }
+                else if ((*i)->fMonoFore)
+                {
+                    RGB color;
+                    uint8_t invRate = 255 - (*i)->fTransitionRate;
+
+                    color.r = (((*i)->fForeColor.r * (*i)->fTransitionRate) >> 8);
+                    color.g = (((*i)->fForeColor.g * (*i)->fTransitionRate) >> 8);
+                    color.b = (((*i)->fForeColor.b * (*i)->fTransitionRate) >> 8);
+
+                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                    {
+                        auto offsetedLedIndex = ledIndex + (*i)->fStartIndex;
+
+                        color.r += (fLedData[offsetedLedIndex].r * invRate) >> 8;
+                        color.g += (fLedData[offsetedLedIndex].g * invRate) >> 8;
+                        color.b += (fLedData[offsetedLedIndex].b * invRate) >> 8;
+
+                        fLedData[ledIndex + (*i)->fStartIndex] = color;
+                    }
+                }
+                else if ((*i)->fMonoBack)
+                {
+                    RGB color;
+                    uint8_t invRate = 255 - (*i)->fTransitionRate;
+
+                    color.r = (((*i)->fBackColor.r * invRate) >> 8);
+                    color.g = (((*i)->fBackColor.g * invRate) >> 8);
+                    color.b = (((*i)->fBackColor.b * invRate) >> 8);
+
+                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                    {
+                        auto offsetedLedIndex = ledIndex + (*i)->fStartIndex;
+
+                        color.r += (fLedData[offsetedLedIndex].r * (*i)->fTransitionRate) >> 8;
+                        color.g += (fLedData[offsetedLedIndex].g * (*i)->fTransitionRate) >> 8;
+                        color.b += (fLedData[offsetedLedIndex].b * (*i)->fTransitionRate) >> 8;
+
+                        fLedData[ledIndex + (*i)->fStartIndex] = color;
+                    }
+                }
+                break;
+            
+            case TRANSITION_TYPE_BLINKING:
+                {
+                    uint8_t blinkingSpeed = 255;
+                    uint8_t blinkingRatio = 127;
+                }
+                break;
+            
+            case TRANSITION_TYPE_FLICKERING:
+                {
+
+                }
+                break;
+            case TRANSITION_TYPE_SIMPLEX_SLICE:
+                {
+                    _iq16 y = _IQ16(xTaskGetTickCount()/10);
+
+                    //ESP_LOGI("NOISE", "START");
+                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                    {
+                        uint8_t noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), _IQ16(0.09)), _IQ16mpy(y, _IQ16(0.09)));
+
+                        if (noiseLevel > (*i)->fTransitionRate)
+                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
+                        else
+                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
+                    }
+                }
+                break;
+            case TRANSITION_TYPE_SIMPLEX_FADE:
+                {
+                    _iq16 y = _IQ16(xTaskGetTickCount()/10);
+
+                    //ESP_LOGI("NOISE", "START");
+                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                    {
+                        uint8_t noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), _IQ16(0.09)), _IQ16mpy(y, _IQ16(0.09)));
+
+                        RGB color;
+                        color.r = (((*i)->fForeColor.r * noiseLevel) >> 8) + (((*i)->fBackColor.r * (255 - noiseLevel)) >> 8);
+                        color.g = (((*i)->fForeColor.g * noiseLevel) >> 8) + (((*i)->fBackColor.g * (255 - noiseLevel)) >> 8);
+                        color.b = (((*i)->fForeColor.b * noiseLevel) >> 8) + (((*i)->fBackColor.b * (255 - noiseLevel)) >> 8);
+                        fLedData[ledIndex + (*i)->fStartIndex] = color;
                     }
                 }
                 break;
