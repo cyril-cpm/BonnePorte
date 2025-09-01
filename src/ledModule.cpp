@@ -142,6 +142,13 @@ RGB     LedModule::GetLedColor(size_t i)
     return fLedData[i];
 }
 
+RGB&    LedModule::operator[](size_t i)
+{
+    if (i > fNumLed)
+        i = 0;
+    return fLedData[i];
+}
+
 void    LedModule::Update()
 {
     for (auto i = fLedZones.rbegin(); i != fLedZones.rend(); i++)
@@ -423,6 +430,54 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
             color.b += (module->GetLedColor(offsetedLedIndex).b * fRate.fRate) >> 8;
 
             module->SetLedColor(ledIndex + zone->fStartIndex, color);
+        }
+    }
+}
+
+SimplexTransition::SimplexTransition(const char* name) : Transition(name)
+{
+    fRate.fName = newStrCat(name, "_RATE");
+    fRate.fRate = 0;
+
+    fRate.InitSTR();
+
+    char* settingName = newStrCat(name, "_TYPE");
+    STR_UInt8Ref(fType, settingName);
+    delete[] settingName;
+}
+
+void SimplexTransition::Apply(LedModule* module, LedZone* zone)
+{
+    fRate.Update();
+    
+    _iq16 y = _IQ16(xTaskGetTickCount()/10);
+
+    for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+    {
+        uint8_t noiseLevel = 0;
+
+        noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), fOctaves[0].freqX),
+                                    _IQ16mpy(y, fOctaves[0].freqY));
+
+        switch (fType)
+        {
+            case SLICE:
+                (*module)[ledIndex + zone->fStartIndex] = (noiseLevel > fRate) ?
+                                                            zone->fForeColor :
+                                                            zone->fBackColor;
+                break;
+
+            case FADE:
+            {
+                RGB color;
+                color.r = ((zone->fForeColor.r * noiseLevel) >> 8) + ((zone->fBackColor.r * (255 - noiseLevel)) >> 8);
+                color.g = ((zone->fForeColor.g * noiseLevel) >> 8) + ((zone->fBackColor.g * (255 - noiseLevel)) >> 8);
+                color.b = ((zone->fForeColor.b * noiseLevel) >> 8) + ((zone->fBackColor.b * (255 - noiseLevel)) >> 8);
+                (*module)[ledIndex + zone->fStartIndex] = color;
+                break;
+            }
+            default:
+                break;
         }
     }
 }

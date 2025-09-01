@@ -105,3 +105,8 @@ void TransitionValue::InitSTR()
     });
     delete[] name;
 }
+
+TransitionValue::operator uint8_t&()
+{
+    return fRate;
+}

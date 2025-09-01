@@ -21,4 +21,6 @@ struct TransitionValue
 
     void                Update();
     void                InitSTR();
+
+    operator uint8_t& ();
 };

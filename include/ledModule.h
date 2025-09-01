@@ -4,6 +4,7 @@
 #include "CustomType.hpp"
 #include "transitionValue.h"
 #include <vector>
+#include "IQmathLib.h"
 
 typedef enum {
     TRANSITION_TYPE_LOADING         = 1,
@@ -58,6 +59,32 @@ class FadingTransition : public Transition
     TransitionValue fRate;
 };
 
+struct SimplexOctave
+{
+    _iq16   freqX;
+    _iq16   freqY;
+    _iq16   amplitude;
+    String  name;
+};
+
+class SimplexTransition : public Transition
+{
+    public:
+    SimplexTransition(const char* name);
+    virtual void Apply(LedModule* module, LedZone* zone);
+
+    enum {
+        SLICE = 0,
+        FADE = 1
+    };
+
+    private:
+    SimplexTransition();
+    TransitionValue             fRate;
+    std::vector<SimplexOctave>  fOctaves;
+    uint8_t                     fType = SLICE;
+};
+
 struct LedZone
 {
     public:
@@ -97,6 +124,8 @@ class LedModule
 
     void    SetLedColor(size_t i, RGB color);
     RGB     GetLedColor(size_t i);
+
+    RGB&    operator[](size_t i);
 
     void Update();
 };
