@@ -5,6 +5,53 @@
 #include "freertos/task.h"
 #include "Simplex.h"
 
+static char* newStrCpy(const char* str)
+{
+    if (!str)
+        return nullptr;
+    
+    int i = 0;
+    while (str[i])
+        i++;
+
+    char *dst = nullptr;
+
+    dst = new char[i+1];
+
+    dst[i] = '\0';
+
+    for (auto j = 0; j < i; j++)
+        dst[j] = str[j];
+
+    return dst;
+}
+
+static char* newStrCat(const char* a, const char* b)
+{
+    if (!a || !b)
+        return nullptr;
+
+    int i = 0;
+    for (; a[i]; i++);
+
+    int j = 0;
+    for (; b[j]; j++);
+
+    char* dst = nullptr;
+
+    dst = new char[i+j+1];
+
+    dst[i+j] = '\0';
+
+    for (auto k = 0; k < i; k++)
+        dst[k] = a[k];
+
+    for (auto k = 0; k < j; k++)
+        dst[k + i] = b[k];
+
+    return dst;
+}
+
 LedModule::LedModule(gpio_num_t ledPin, uint16_t numLed)
 {
     fNumLed = numLed;
@@ -18,35 +65,26 @@ void    LedModule::_initSTR(LedZone* ledZone)
 {
     if (ledZone)
     {
-        STR_UInt16Ref(ledZone->fNbLed, "NB_LED");
-        STR_UInt16Ref(ledZone->fStartIndex, "START_INDEX");
-        STR_UInt8Ref(ledZone->fBegin, "BEGIN");
-        STR_UInt8Ref(ledZone->fEnd, "END");
-        STR_UInt32Ref(ledZone->fTime, "TIME");
+        char* name = newStrCat(ledZone->fName, "_NBLED");
+        STR_UInt16Ref(ledZone->fNbLed, name);
+        delete[] name;
 
-        STR.AddSetting(Setting::Type::Trigger, nullptr, 0, "TRANSITION", [ledZone]() {
-            if (ledZone)
-            {
-                ledZone->fTransitioning = true;
-                ledZone->fForward = ledZone->fBegin < ledZone->fEnd;
-                ledZone->fTickStamp = xTaskGetTickCount();
-                ledZone->fDeltaRate = abs(ledZone->fBegin - ledZone->fEnd);
-                ledZone->fRatio = ((uint32_t)(ledZone->fDeltaRate) << 16) / ledZone->fTime;
-            }
-        });
+        name = newStrCat(ledZone->fName, "_STARTINDEX");
+        STR_UInt16Ref(ledZone->fStartIndex, name);
+        delete[] name;
     }
 }
 
-LedZone* LedModule::AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, transition_type_t transition)
+LedZone* LedModule::AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
         .fStartIndex = startIndex,
         .fForeColor = color,
-        .fTransitionType = transition,
         .fBicolor = false,
         .fMonoFore = true,
-        .fMonoBack = false
+        .fMonoBack = false,
+        .fName = newStrCpy(name)
     };
 
     _initSTR(newZone);
@@ -56,16 +94,16 @@ LedZone* LedModule::AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB c
     return fLedZones.back();
 }
 
-LedZone* LedModule::AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, transition_type_t transition)
+LedZone* LedModule::AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
         .fStartIndex = startIndex,
         .fBackColor = color,
-        .fTransitionType = transition,
         .fBicolor = false,
         .fMonoFore = false,
-        .fMonoBack = true
+        .fMonoBack = true,
+        .fName = newStrCpy(name)
     };
 
     fLedZones.push_back(newZone);
@@ -73,15 +111,15 @@ LedZone* LedModule::AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB c
     return fLedZones.back();
 }
 
-LedZone* LedModule::AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, transition_type_t transition)
+LedZone* LedModule::AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, const char* name, transition_type_t transition)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
         .fStartIndex = startIndex,
         .fForeColor = foreColor,
         .fBackColor = backColor,
-        .fTransitionType = transition,
-        .fBicolor = true
+        .fBicolor = true,
+        .fName = newStrCpy(name)
     };
 
     _initSTR(newZone);
@@ -91,56 +129,29 @@ LedZone* LedModule::AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB for
     return fLedZones.back();
 }
 
+void    LedModule::SetLedColor(size_t i, RGB color)
+{
+    if (i < fNumLed)
+        fLedData[i] = color;
+}
+
+RGB     LedModule::GetLedColor(size_t i)
+{
+    if (i > fNumLed)
+        i = 0;
+    return fLedData[i];
+}
+
 void    LedModule::Update()
 {
     for (auto i = fLedZones.rbegin(); i != fLedZones.rend(); i++)
     {
-        if ((*i)->fTransitioning)
-        {
-            uint32_t deltaTick = (xTaskGetTickCount() - (*i)->fTickStamp);
-
-            uint16_t newRate = 0;
-
-            newRate = (*i)->fBegin + ( ((*i)->fForward) ? (((*i)->fRatio * deltaTick) >> 16) : -(((*i)->fRatio * deltaTick) >> 16));
-
-            if (newRate > 255)
-                newRate = (*i)->fForward ? 255 : 0;
-            
-            if (((*i)->fForward && newRate >= (*i)->fEnd) || (!(*i)->fForward && newRate <= (*i)->fEnd))
-            {
-                (*i)->fTransitioning = false;
-                (*i)->fTransitionRate = (*i)->fEnd;
-            } 
-            else
-                (*i)->fTransitionRate = newRate;
-        }
-
+        /*(*i)->fTransitionVRate.Update();
 
         uint32_t rateFactor = (1u << 16) / (*i)->fNbLed;
 
         switch ((*i)->fTransitionType)
         {
-            case TRANSITION_TYPE_LAODING:
-                for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                {
-                    //uint16_t ratedLed = (((uint16_t) ledIndex << 8) - ledIndex) /  (*i)->fNbLed; 
-                    uint8_t ratedLed = (ledIndex * rateFactor) >> 8;
-                    if (!(*i)->fTransitionRate || ratedLed > (*i)->fTransitionRate)
-                    {
-                        if ((*i)->fBicolor)
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
-                        else if ((*i)->fMonoBack)
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
-                    }
-                    else
-                    {
-                        if ((*i)->fBicolor)
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
-                        else if ((*i)->fMonoFore)
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
-                    }
-                }
-                break;
             
             case TRANSITION_TYPE_FADING:
                 if ((*i)->fBicolor)
@@ -148,7 +159,7 @@ void    LedModule::Update()
                     RGB color;
                     RGB foreColor = (*i)->fForeColor;
                     RGB backColor = (*i)->fBackColor;
-                    uint8_t rate = (*i)->fTransitionRate;
+                    uint8_t rate = (*i)->fTransitionVRate;
                     uint8_t invRate = 255 - rate;
 
                     color.r = ((foreColor.r * rate) >> 8) + ((backColor.r * invRate) >> 8);
@@ -161,11 +172,11 @@ void    LedModule::Update()
                 else if ((*i)->fMonoFore)
                 {
                     RGB color;
-                    uint8_t invRate = 255 - (*i)->fTransitionRate;
+                    uint8_t invRate = 255 - (*i)->fTransitionVRate;
 
-                    color.r = (((*i)->fForeColor.r * (*i)->fTransitionRate) >> 8);
-                    color.g = (((*i)->fForeColor.g * (*i)->fTransitionRate) >> 8);
-                    color.b = (((*i)->fForeColor.b * (*i)->fTransitionRate) >> 8);
+                    color.r = (((*i)->fForeColor.r * (*i)->fTransitionVRate) >> 8);
+                    color.g = (((*i)->fForeColor.g * (*i)->fTransitionVRate) >> 8);
+                    color.b = (((*i)->fForeColor.b * (*i)->fTransitionVRate) >> 8);
 
                     for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
                     {
@@ -181,7 +192,7 @@ void    LedModule::Update()
                 else if ((*i)->fMonoBack)
                 {
                     RGB color;
-                    uint8_t invRate = 255 - (*i)->fTransitionRate;
+                    uint8_t invRate = 255 - (*i)->fTransitionVRate;
 
                     color.r = (((*i)->fBackColor.r * invRate) >> 8);
                     color.g = (((*i)->fBackColor.g * invRate) >> 8);
@@ -191,9 +202,9 @@ void    LedModule::Update()
                     {
                         auto offsetedLedIndex = ledIndex + (*i)->fStartIndex;
 
-                        color.r += (fLedData[offsetedLedIndex].r * (*i)->fTransitionRate) >> 8;
-                        color.g += (fLedData[offsetedLedIndex].g * (*i)->fTransitionRate) >> 8;
-                        color.b += (fLedData[offsetedLedIndex].b * (*i)->fTransitionRate) >> 8;
+                        color.r += (fLedData[offsetedLedIndex].r * (*i)->fTransitionVRate) >> 8;
+                        color.g += (fLedData[offsetedLedIndex].g * (*i)->fTransitionVRate) >> 8;
+                        color.b += (fLedData[offsetedLedIndex].b * (*i)->fTransitionVRate) >> 8;
 
                         fLedData[ledIndex + (*i)->fStartIndex] = color;
                     }
@@ -221,7 +232,7 @@ void    LedModule::Update()
                     {
                         uint8_t noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), _IQ16(0.09)), _IQ16mpy(y, _IQ16(0.09)));
 
-                        if (noiseLevel > (*i)->fTransitionRate)
+                        if (noiseLevel > (*i)->fTransitionVRate)
                             fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
                         else
                             fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
@@ -247,8 +258,171 @@ void    LedModule::Update()
                 break;
             default:
                 break;
+        }*/
+    
+        if ((*i)->fTransition)
+        {
+            (*i)->fTransition->Apply(this, *i);
         }
     }
 
     FLed.show();
+}
+
+Transition::Transition(const char* name)
+{
+    fName = newStrCpy(name);
+}
+
+LoadingTransition::LoadingTransition(const char* name) : Transition(name)
+{
+    fRate.fName = newStrCat(name, "_RATE");
+    fRate.fRate = 0;
+
+    fRate.InitSTR();
+
+    char* settingName = newStrCat(name, "_DIRECTION");
+    STR_UInt8Ref(fDirection, settingName);
+    delete[] settingName;
+}
+
+void LoadingTransition::Apply(LedModule* module, LedZone* zone)
+{
+    fRate.Update();
+    uint32_t rateFactor = (1u << 16) / zone->fNbLed;
+
+    for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+    {
+       
+        uint8_t ratedLed = (ledIndex * rateFactor) >> 8;
+        int resolvedIndex = zone->fStartIndex;
+        int invResolvedIndex = zone->fStartIndex;
+
+        switch (fDirection)
+        {
+        case BEGIN_END:
+            resolvedIndex += ledIndex;
+            break;
+        
+        case END_BEGIN:
+            resolvedIndex += zone->fNbLed - 1 - ledIndex;
+            break;
+
+        case MID_EXT:
+            resolvedIndex += (zone->fNbLed - 1 - ledIndex) >> 1;
+            invResolvedIndex += (ledIndex >> 1) + (zone->fNbLed >> 1);
+            break;
+
+        case EXT_MID:
+            resolvedIndex += ledIndex >> 1;
+            invResolvedIndex += ((zone->fNbLed - 1 - ledIndex) >> 1) + (zone->fNbLed >> 1);
+        default:
+            break;
+        }
+        
+        if (!fRate.fRate || ratedLed > fRate.fRate)
+        {
+            if (zone->fBicolor)
+            {
+                module->SetLedColor(resolvedIndex, zone->fBackColor);
+
+                if (fDirection == MID_EXT || fDirection == EXT_MID)
+                    module->SetLedColor(invResolvedIndex, zone->fBackColor);
+            }
+            else if (zone->fMonoBack)
+            {
+                module->SetLedColor(resolvedIndex, zone->fBackColor);
+
+                if (fDirection == MID_EXT || fDirection == EXT_MID)
+                    module->SetLedColor(invResolvedIndex, zone->fBackColor);
+            }
+        }
+        else
+        {
+            if (zone->fBicolor)
+            {
+                module->SetLedColor(resolvedIndex, zone->fForeColor);
+
+                if (fDirection == MID_EXT || fDirection == EXT_MID)
+                    module->SetLedColor(invResolvedIndex, zone->fForeColor);
+            }
+
+            else if (zone->fMonoFore)
+            {
+                module->SetLedColor(resolvedIndex, zone->fForeColor);
+
+                if (fDirection == MID_EXT || fDirection == EXT_MID)
+                    module->SetLedColor(invResolvedIndex, zone->fForeColor);
+            }
+        }
+    }
+}
+
+FadingTransition::FadingTransition(const char* name) : Transition(name)
+{
+    fRate.fName = newStrCat(name, "_RATE");
+    fRate.fRate = 0;
+
+    fRate.InitSTR();
+}
+
+void FadingTransition::Apply(LedModule* module, LedZone* zone)
+{
+    fRate.Update();
+    
+    if (zone->fBicolor)
+    {
+        RGB color;
+        RGB foreColor = zone->fForeColor;
+        RGB backColor = zone->fBackColor;
+        uint8_t rate = fRate.fRate;
+        uint8_t invRate = 255 - rate;
+
+        color.r = ((foreColor.r * rate) >> 8) + ((backColor.r * invRate) >> 8);
+        color.g = ((foreColor.g * rate) >> 8) + ((backColor.g * invRate) >> 8);
+        color.b = ((foreColor.b * rate) >> 8) + ((backColor.b * invRate) >> 8);
+
+        for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+            module->SetLedColor(ledIndex + zone->fStartIndex, color);
+    }
+    else if (zone->fMonoFore)
+    {
+        RGB color;
+        uint8_t invRate = 255 - fRate.fRate;
+
+        color.r = ((zone->fForeColor.r * fRate.fRate) >> 8);
+        color.g = ((zone->fForeColor.g * fRate.fRate) >> 8);
+        color.b = ((zone->fForeColor.b * fRate.fRate) >> 8);
+
+        for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+        {
+            auto offsetedLedIndex = ledIndex + zone->fStartIndex;
+
+            color.r += (module->GetLedColor(offsetedLedIndex).r * invRate) >> 8;
+            color.g += (module->GetLedColor(offsetedLedIndex).g * invRate) >> 8;
+            color.b += (module->GetLedColor(offsetedLedIndex).b * invRate) >> 8;
+
+            module->SetLedColor(ledIndex + zone->fStartIndex, color);
+        }
+    }
+    else if (zone->fMonoBack)
+    {
+        RGB color;
+        uint8_t invRate = 255 - fRate.fRate;
+
+        color.r = ((zone->fBackColor.r * invRate) >> 8);
+        color.g = ((zone->fBackColor.g * invRate) >> 8);
+        color.b = ((zone->fBackColor.b * invRate) >> 8);
+
+        for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+        {
+            auto offsetedLedIndex = ledIndex + zone->fStartIndex;
+
+            color.r += (module->GetLedColor(offsetedLedIndex).r * fRate.fRate) >> 8;
+            color.g += (module->GetLedColor(offsetedLedIndex).g * fRate.fRate) >> 8;
+            color.b += (module->GetLedColor(offsetedLedIndex).b * fRate.fRate) >> 8;
+
+            module->SetLedColor(ledIndex + zone->fStartIndex, color);
+        }
+    }
 }

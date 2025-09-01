@@ -17,14 +17,20 @@ extern "C" void app_main()
 
     LedModule module(GPIO_NUM_4, 31);
 
-    //module.AddBiColorZone(0, 16, RGB(255, 0, 0), RGB(0, 0, 255), TRANSITION_TYPE_FADING);
+    auto zone = module.AddBiColorZone(0, 16, RGB(255, 0, 0), RGB(0, 0, 255), "LAZONE");
+
+    LoadingTransition tr("LATRANSI");
+    FadingTransition fade("FADING");
+    zone->fTransition = &tr;
     //module.AddBiColorZone(16, 15, RGB(0, 0, 255), RGB(255, 0, 0), TRANSITION_TYPE_FADING);
 
-    module.AddBiColorZone(0, 31, RGB(255, 0, 0), RGB(0, 0, 255), TRANSITION_TYPE_SIMPLEX_FADE);
+    //module.AddBiColorZone(0, 31, RGB(255, 0, 0), RGB(0, 0, 255), TRANSITION_TYPE_SIMPLEX_FADE);
     
      while(true)
      {
         STR.Update();
+
         module.Update();
+
      }
 }
