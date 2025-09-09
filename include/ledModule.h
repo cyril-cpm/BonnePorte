@@ -71,7 +71,8 @@ class SimplexTransition : public Transition
 {
     public:
     SimplexTransition(const char* name);
-    virtual void Apply(LedModule* module, LedZone* zone);
+    virtual void    Apply(LedModule* module, LedZone* zone);
+    void            AddOctave(float x, float y, float amp, const char* name);
 
     enum {
         SLICE = 0,

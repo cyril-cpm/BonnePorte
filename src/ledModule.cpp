@@ -462,9 +462,12 @@ void SimplexTransition::Apply(LedModule* module, LedZone* zone)
         switch (fType)
         {
             case SLICE:
-                (*module)[ledIndex + zone->fStartIndex] = (noiseLevel > fRate) ?
+                /*(*module)[ledIndex + zone->fStartIndex] = (noiseLevel > fRate) ?
                                                             zone->fForeColor :
-                                                            zone->fBackColor;
+                                                            zone->fBackColor;*/
+                module->SetLedColor(ledIndex + zone->fStartIndex, (noiseLevel < fRate) ?
+                                                            zone->fForeColor :
+                                                            zone->fBackColor);
                 break;
 
             case FADE:
@@ -480,4 +483,14 @@ void SimplexTransition::Apply(LedModule* module, LedZone* zone)
                 break;
         }
     }
+}
+
+void    SimplexTransition::AddOctave(float x, float y, float amp, const char* name)
+{
+    fOctaves.push_back({
+        .freqX = _IQ16(x),
+        .freqY = _IQ16(y),
+        .amplitude = _IQ16(amp),
+        .name = name
+    });
 }

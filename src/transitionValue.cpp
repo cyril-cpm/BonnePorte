@@ -70,6 +70,7 @@ void TransitionValue::Update()
         {
             fTransitioning = false;
             fRate = fEnd;
+            STR.SendNotif(0X10);
         } 
         else
             fRate = newRate;

@@ -1,5 +1,6 @@
 #include "Settingator.h"
 #include "UARTCommunicator.h"
+#include "ESPNowCommunicator.h"
 #include "Led.h"
 #include "ledModule.h"
 #include "CustomType.hpp"
@@ -15,13 +16,25 @@ extern "C" void app_main()
 
     STR.SetCommunicator(UARTCTR::CreateInstance());
 
-    LedModule module(GPIO_NUM_4, 31);
+    LedModule module(GPIO_NUM_27, 920);
 
-    auto zone = module.AddBiColorZone(0, 16, RGB(255, 0, 0), RGB(0, 0, 255), "LAZONE");
+    auto zoneB = module.AddForeColorZone(0, 920, RGB(0, 0, 0),"BACK_ZONE");
 
-    LoadingTransition tr("LATRANSI");
-    FadingTransition fade("FADING");
-    zone->fTransition = &tr;
+    auto zoneG = module.AddBiColorZone(0, 460, RGB(255, 0, 0), RGB(0, 0, 255), "ZONEGAUCHE");
+    auto zoneD = module.AddBiColorZone(460, 460, RGB(0, 0, 255), RGB(255, 0, 0), "ZONEDROITE");
+
+    //LoadingTransition tr("LATRANSI");
+    //FadingTransition fade("FADING");
+    SimplexTransition simplex("SIMPLEX");
+    simplex.AddOctave(0.09, 0.09, 1.0, "OCT");
+
+    LoadingTransition tr("LOADING");
+    //tr.AddOctave(0.01, 0.01, 1.0, "OCT");
+    zoneG->fTransition = &simplex;
+    //zoneB->fTransition = &tr;
+
+    zoneD->fTransition = &simplex;
+    zoneB->fTransition = &tr;
     //module.AddBiColorZone(16, 15, RGB(0, 0, 255), RGB(255, 0, 0), TRANSITION_TYPE_FADING);
 
     //module.AddBiColorZone(0, 31, RGB(255, 0, 0), RGB(0, 0, 255), TRANSITION_TYPE_SIMPLEX_FADE);
