@@ -86,6 +86,22 @@ class SimplexTransition : public Transition
     uint8_t                     fType = SLICE;
 };
 
+class BlinkingTransition : public Transition
+{
+    public:
+    BlinkingTransition(const char* name);
+    virtual void    Apply(LedModule* module, LedZone* zone);
+
+    private:
+    BlinkingTransition();
+    TransitionValue             fRate;
+    uint16_t                    fMidBlinkSpeed = 50;
+    uint16_t                    fEdgeBlinkSpeed = 1250;
+    uint32_t                    fTickStamp = 0;
+    bool                        fPolarity = false;
+    int8_t                      fExp = 0;
+};
+
 struct LedZone
 {
     public:

@@ -63,6 +63,27 @@ void TransitionValue::Update()
 
         newRate = fBegin + ( (fForward) ? ((fRatio * deltaTick) >> 16) : -((fRatio * deltaTick) >> 16));
 
+        if (fExp > 0)
+        {
+            uint16_t t = newRate;
+            for (auto i = 0; i < fExp; i++)
+            {
+                t = (t * newRate) >> 8;
+            }
+        }
+        else if (fExp < 0)
+        {
+            auto limit = -fExp;
+
+            uint16_t invNewRate = ~newRate;
+            uint16_t t = ~newRate;
+            for (auto i = 0 ; i < limit; i++)
+            {
+                t = (t * invNewRate) >> 8;
+            }
+            newRate = ~t;
+        }
+
         if (newRate > 255)
             newRate = fForward ? 255 : 0;
         
@@ -93,6 +114,10 @@ void TransitionValue::InitSTR()
     STR_UInt32Ref(fTime, name);
     delete[] name;
 
+    name = newStrCat(fName, "_EXP");
+    STR_Int8Ref(fExp, name);
+    delete[] name;
+
     name = newStrCat(fName, "_TRANSITION");
     STR.AddSetting(Setting::Type::Trigger, nullptr, 0, name, [ptr = this]() {
         if (ptr)
@@ -101,7 +126,7 @@ void TransitionValue::InitSTR()
             ptr->fForward = ptr->fBegin < ptr->fEnd;
             ptr->fTickStamp = xTaskGetTickCount();
             ptr->fDeltaRate = abs(ptr->fBegin - ptr->fEnd);
-            ptr->fRatio = ((uint32_t)(ptr->fDeltaRate) << 16) / ptr->fTime;
+            ptr->fRatio = ((uint32_t)(ptr->fDeltaRate) << 16) / pdMS_TO_TICKS(ptr->fTime);
         }
     });
     delete[] name;

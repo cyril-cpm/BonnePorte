@@ -153,123 +153,16 @@ void    LedModule::Update()
 {
     for (auto i = fLedZones.rbegin(); i != fLedZones.rend(); i++)
     {
-        /*(*i)->fTransitionVRate.Update();
-
-        uint32_t rateFactor = (1u << 16) / (*i)->fNbLed;
-
-        switch ((*i)->fTransitionType)
-        {
-            
-            case TRANSITION_TYPE_FADING:
-                if ((*i)->fBicolor)
-                {
-                    RGB color;
-                    RGB foreColor = (*i)->fForeColor;
-                    RGB backColor = (*i)->fBackColor;
-                    uint8_t rate = (*i)->fTransitionVRate;
-                    uint8_t invRate = 255 - rate;
-
-                    color.r = ((foreColor.r * rate) >> 8) + ((backColor.r * invRate) >> 8);
-                    color.g = ((foreColor.g * rate) >> 8) + ((backColor.g * invRate) >> 8);
-                    color.b = ((foreColor.b * rate) >> 8) + ((backColor.b * invRate) >> 8);
-
-                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                        fLedData[ledIndex + (*i)->fStartIndex] = color;
-                }
-                else if ((*i)->fMonoFore)
-                {
-                    RGB color;
-                    uint8_t invRate = 255 - (*i)->fTransitionVRate;
-
-                    color.r = (((*i)->fForeColor.r * (*i)->fTransitionVRate) >> 8);
-                    color.g = (((*i)->fForeColor.g * (*i)->fTransitionVRate) >> 8);
-                    color.b = (((*i)->fForeColor.b * (*i)->fTransitionVRate) >> 8);
-
-                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                    {
-                        auto offsetedLedIndex = ledIndex + (*i)->fStartIndex;
-
-                        color.r += (fLedData[offsetedLedIndex].r * invRate) >> 8;
-                        color.g += (fLedData[offsetedLedIndex].g * invRate) >> 8;
-                        color.b += (fLedData[offsetedLedIndex].b * invRate) >> 8;
-
-                        fLedData[ledIndex + (*i)->fStartIndex] = color;
-                    }
-                }
-                else if ((*i)->fMonoBack)
-                {
-                    RGB color;
-                    uint8_t invRate = 255 - (*i)->fTransitionVRate;
-
-                    color.r = (((*i)->fBackColor.r * invRate) >> 8);
-                    color.g = (((*i)->fBackColor.g * invRate) >> 8);
-                    color.b = (((*i)->fBackColor.b * invRate) >> 8);
-
-                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                    {
-                        auto offsetedLedIndex = ledIndex + (*i)->fStartIndex;
-
-                        color.r += (fLedData[offsetedLedIndex].r * (*i)->fTransitionVRate) >> 8;
-                        color.g += (fLedData[offsetedLedIndex].g * (*i)->fTransitionVRate) >> 8;
-                        color.b += (fLedData[offsetedLedIndex].b * (*i)->fTransitionVRate) >> 8;
-
-                        fLedData[ledIndex + (*i)->fStartIndex] = color;
-                    }
-                }
-                break;
-            
-            case TRANSITION_TYPE_BLINKING:
-                {
-                    uint8_t blinkingSpeed = 255;
-                    uint8_t blinkingRatio = 127;
-                }
-                break;
-            
-            case TRANSITION_TYPE_FLICKERING:
-                {
-
-                }
-                break;
-            case TRANSITION_TYPE_SIMPLEX_SLICE:
-                {
-                    _iq16 y = _IQ16(xTaskGetTickCount()/10);
-
-                    //ESP_LOGI("NOISE", "START");
-                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                    {
-                        uint8_t noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), _IQ16(0.09)), _IQ16mpy(y, _IQ16(0.09)));
-
-                        if (noiseLevel > (*i)->fTransitionVRate)
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fForeColor;
-                        else
-                            fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
-                    }
-                }
-                break;
-            case TRANSITION_TYPE_SIMPLEX_FADE:
-                {
-                    _iq16 y = _IQ16(xTaskGetTickCount()/10);
-
-                    //ESP_LOGI("NOISE", "START");
-                    for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
-                    {
-                        uint8_t noiseLevel = SIMPLEX.Noise(_IQ16mpy(_IQ16(ledIndex), _IQ16(0.09)), _IQ16mpy(y, _IQ16(0.09)));
-
-                        RGB color;
-                        color.r = (((*i)->fForeColor.r * noiseLevel) >> 8) + (((*i)->fBackColor.r * (255 - noiseLevel)) >> 8);
-                        color.g = (((*i)->fForeColor.g * noiseLevel) >> 8) + (((*i)->fBackColor.g * (255 - noiseLevel)) >> 8);
-                        color.b = (((*i)->fForeColor.b * noiseLevel) >> 8) + (((*i)->fBackColor.b * (255 - noiseLevel)) >> 8);
-                        fLedData[ledIndex + (*i)->fStartIndex] = color;
-                    }
-                }
-                break;
-            default:
-                break;
-        }*/
-    
         if ((*i)->fTransition)
         {
             (*i)->fTransition->Apply(this, *i);
+        }
+        else if ((*i)->fMonoBack || (*i)->fBicolor)
+        {
+            for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+            {
+                fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
+            }
         }
     }
 
@@ -377,26 +270,23 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
 {
     fRate.Update();
     
+    RGB color;
+    uint8_t invRate = ~fRate;
+    
     if (zone->fBicolor)
     {
-        RGB color;
         RGB foreColor = zone->fForeColor;
         RGB backColor = zone->fBackColor;
-        uint8_t rate = fRate.fRate;
-        uint8_t invRate = 255 - rate;
 
-        color.r = ((foreColor.r * rate) >> 8) + ((backColor.r * invRate) >> 8);
-        color.g = ((foreColor.g * rate) >> 8) + ((backColor.g * invRate) >> 8);
-        color.b = ((foreColor.b * rate) >> 8) + ((backColor.b * invRate) >> 8);
+        color.r = ((foreColor.r * fRate) >> 8) + ((backColor.r * ~fRate) >> 8);
+        color.g = ((foreColor.g * fRate) >> 8) + ((backColor.g * ~fRate) >> 8);
+        color.b = ((foreColor.b * fRate) >> 8) + ((backColor.b * ~fRate) >> 8);
 
         for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
             module->SetLedColor(ledIndex + zone->fStartIndex, color);
     }
     else if (zone->fMonoFore)
     {
-        RGB color;
-        uint8_t invRate = 255 - fRate.fRate;
-
         color.r = ((zone->fForeColor.r * fRate.fRate) >> 8);
         color.g = ((zone->fForeColor.g * fRate.fRate) >> 8);
         color.b = ((zone->fForeColor.b * fRate.fRate) >> 8);
@@ -414,9 +304,6 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
     }
     else if (zone->fMonoBack)
     {
-        RGB color;
-        uint8_t invRate = 255 - fRate.fRate;
-
         color.r = ((zone->fBackColor.r * invRate) >> 8);
         color.g = ((zone->fBackColor.g * invRate) >> 8);
         color.b = ((zone->fBackColor.b * invRate) >> 8);
@@ -473,9 +360,9 @@ void SimplexTransition::Apply(LedModule* module, LedZone* zone)
             case FADE:
             {
                 RGB color;
-                color.r = ((zone->fForeColor.r * noiseLevel) >> 8) + ((zone->fBackColor.r * (255 - noiseLevel)) >> 8);
-                color.g = ((zone->fForeColor.g * noiseLevel) >> 8) + ((zone->fBackColor.g * (255 - noiseLevel)) >> 8);
-                color.b = ((zone->fForeColor.b * noiseLevel) >> 8) + ((zone->fBackColor.b * (255 - noiseLevel)) >> 8);
+                color.r = ((zone->fForeColor.r * noiseLevel) >> 8) + ((zone->fBackColor.r * (~noiseLevel)) >> 8);
+                color.g = ((zone->fForeColor.g * noiseLevel) >> 8) + ((zone->fBackColor.g * (~noiseLevel)) >> 8);
+                color.b = ((zone->fForeColor.b * noiseLevel) >> 8) + ((zone->fBackColor.b * (~noiseLevel)) >> 8);
                 (*module)[ledIndex + zone->fStartIndex] = color;
                 break;
             }
@@ -493,4 +380,102 @@ void    SimplexTransition::AddOctave(float x, float y, float amp, const char* na
         .amplitude = _IQ16(amp),
         .name = name
     });
+}
+
+BlinkingTransition::BlinkingTransition(const char* name) : Transition(name)
+{
+    fRate.fName = newStrCat(name, "_RATE");
+    fRate.fRate = 0;
+    fRate.InitSTR();
+
+    char* settingName = newStrCat(name, "_MIDSPEED");
+    STR_UInt16Ref(fMidBlinkSpeed, settingName);
+    delete[] settingName;
+
+    settingName = newStrCat(name, "_EDGESPEED");
+    STR_UInt16Ref(fEdgeBlinkSpeed, settingName);
+    delete[] settingName;
+
+    settingName = newStrCat(name, "_EXP");
+    STR_Int8Ref(fExp, settingName);
+    delete[] settingName;
+}
+
+void BlinkingTransition::Apply(LedModule* module, LedZone* zone)
+{
+    fRate.Update();
+
+    if (fRate == 0)
+    {
+        fTickStamp = xTaskGetTickCount();
+        fPolarity = false;
+    }
+    else if (fRate == 255)
+    {
+        fTickStamp = xTaskGetTickCount();
+        fPolarity = true;
+    }
+    else
+    {
+        uint32_t deltaTime = pdTICKS_TO_MS(xTaskGetTickCount() - fTickStamp);
+        uint16_t ratedBlinkSpeed;
+
+        uint8_t rate = (fRate > 127 ? ~fRate : fRate) << 1;
+
+        if (fExp > 0)
+        {
+            uint16_t t = rate;
+            for (auto i = 0; i < fExp; i++)
+            {
+                t = (t * rate) >> 8;
+            }
+        }
+        else if (fExp < 0)
+        {
+            auto limit = -fExp;
+
+            uint16_t invNewRate = ~rate;
+            uint16_t t = ~rate;
+            for (auto i = 0 ; i < limit; i++)
+            {
+                t = (t * invNewRate) >> 8;
+            }
+            rate = ~t;
+        }
+
+        ratedBlinkSpeed = fEdgeBlinkSpeed - (rate * (fEdgeBlinkSpeed - fMidBlinkSpeed) >> 8);
+
+        if (deltaTime > ratedBlinkSpeed)
+        {
+            fTickStamp = xTaskGetTickCount();
+            fPolarity = !fPolarity;
+        }
+    }
+
+    RGB color;
+    bool applyColor = false;
+
+    if (zone->fMonoFore && fPolarity)
+    {
+        color = zone->fForeColor;
+        applyColor = true;
+    }
+    else if (zone->fMonoBack && !fPolarity)
+    {
+        color = zone->fBackColor;
+        applyColor = true;
+    }
+    else if (zone->fBicolor)
+    {
+        color = fPolarity ? zone->fForeColor : zone->fBackColor; 
+        applyColor = true;
+    }
+
+    if (applyColor)
+    {
+        for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
+        {
+            (*module)[ledIndex + zone->fStartIndex] = color; 
+        }
+    }
 }
