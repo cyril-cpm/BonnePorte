@@ -3,6 +3,7 @@
 #include "CustomType.hpp"
 #include "freertos/freertos.h"
 #include "freertos/task.h"
+#include "esp_log.h"
 #include "Simplex.h"
 
 static char* newStrCpy(const char* str)
@@ -258,6 +259,11 @@ void LoadingTransition::Apply(LedModule* module, LedZone* zone)
     }
 }
 
+void LoadingTransition::SetRate(uint8_t rate)
+{
+    fRate.fRate = rate;
+}
+
 FadingTransition::FadingTransition(const char* name) : Transition(name)
 {
     fRate.fName = newStrCat(name, "_RATE");
@@ -271,16 +277,17 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
     fRate.Update();
     
     RGB color;
-    uint8_t invRate = ~fRate;
+    RGB fadedColor;
+    uint8_t invRate = ~(fRate.fRate);
     
     if (zone->fBicolor)
     {
         RGB foreColor = zone->fForeColor;
         RGB backColor = zone->fBackColor;
 
-        color.r = ((foreColor.r * fRate) >> 8) + ((backColor.r * ~fRate) >> 8);
-        color.g = ((foreColor.g * fRate) >> 8) + ((backColor.g * ~fRate) >> 8);
-        color.b = ((foreColor.b * fRate) >> 8) + ((backColor.b * ~fRate) >> 8);
+        color.r = ((foreColor.r * fRate) >> 8) + ((backColor.r * ~(fRate.fRate)) >> 8);
+        color.g = ((foreColor.g * fRate) >> 8) + ((backColor.g * ~(fRate.fRate)) >> 8);
+        color.b = ((foreColor.b * fRate) >> 8) + ((backColor.b * ~(fRate.fRate)) >> 8);
 
         for (auto ledIndex = 0; ledIndex < zone->fNbLed; ledIndex++)
             module->SetLedColor(ledIndex + zone->fStartIndex, color);
@@ -295,11 +302,11 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
         {
             auto offsetedLedIndex = ledIndex + zone->fStartIndex;
 
-            color.r += (module->GetLedColor(offsetedLedIndex).r * invRate) >> 8;
-            color.g += (module->GetLedColor(offsetedLedIndex).g * invRate) >> 8;
-            color.b += (module->GetLedColor(offsetedLedIndex).b * invRate) >> 8;
+            fadedColor.r = color.r + (((*module)[offsetedLedIndex].r * invRate) >> 8);
+            fadedColor.g = color.g + (((*module)[offsetedLedIndex].g * invRate) >> 8);
+            fadedColor.b = color.b + (((*module)[offsetedLedIndex].b * invRate) >> 8);
 
-            module->SetLedColor(ledIndex + zone->fStartIndex, color);
+            module->SetLedColor(ledIndex + zone->fStartIndex, fadedColor);
         }
     }
     else if (zone->fMonoBack)
@@ -312,11 +319,11 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
         {
             auto offsetedLedIndex = ledIndex + zone->fStartIndex;
 
-            color.r += (module->GetLedColor(offsetedLedIndex).r * fRate.fRate) >> 8;
-            color.g += (module->GetLedColor(offsetedLedIndex).g * fRate.fRate) >> 8;
-            color.b += (module->GetLedColor(offsetedLedIndex).b * fRate.fRate) >> 8;
+            fadedColor.r = color.r + (((*module)[offsetedLedIndex].r * fRate.fRate) >> 8);
+            fadedColor.g = color.g + (((*module)[offsetedLedIndex].g * fRate.fRate) >> 8);
+            fadedColor.b = color.b + (((*module)[offsetedLedIndex].b * fRate.fRate) >> 8);
 
-            module->SetLedColor(ledIndex + zone->fStartIndex, color);
+            module->SetLedColor(ledIndex + zone->fStartIndex, fadedColor);
         }
     }
 }
@@ -396,9 +403,9 @@ BlinkingTransition::BlinkingTransition(const char* name) : Transition(name)
     STR_UInt16Ref(fEdgeBlinkSpeed, settingName);
     delete[] settingName;
 
-    settingName = newStrCat(name, "_EXP");
+    /*settingName = newStrCat(name, "_EXP");
     STR_Int8Ref(fExp, settingName);
-    delete[] settingName;
+    delete[] settingName;*/
 }
 
 void BlinkingTransition::Apply(LedModule* module, LedZone* zone)
@@ -420,7 +427,7 @@ void BlinkingTransition::Apply(LedModule* module, LedZone* zone)
         uint32_t deltaTime = pdTICKS_TO_MS(xTaskGetTickCount() - fTickStamp);
         uint16_t ratedBlinkSpeed;
 
-        uint8_t rate = (fRate > 127 ? ~fRate : fRate) << 1;
+        uint8_t rate = (fRate > 127 ? ~(fRate.fRate) : fRate) << 1;
 
         if (fExp > 0)
         {

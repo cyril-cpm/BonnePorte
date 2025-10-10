@@ -9,49 +9,84 @@
 
 Settingator STR(nullptr);
 
+#define ALL_LED_LEN  920
+#define ZONE_LEN     460
+#define A_START      0
+#define B_START      460
 extern "C" void app_main()
 {
-    SIMPLEX.begin();
-    STR.begin();
+   SIMPLEX.begin();
+   STR.begin();
 
-    LedModule module(GPIO_NUM_0, 10);
+   //STR.SetCommunicator(UARTCTR::CreateInstance());
 
-    
-    auto zoneVA = module.AddForeColorZone(0, 5, RGB(0, 255, 0), "VA");
-    auto zoneVB = module.AddBackColorZone(5, 5, RGB(0, 255, 0), "VB");
+   ESPNowCore::CreateInstance()->BroadcastPing();
 
-    auto zoneB = module.AddBiColorZone(5, 5, RGB(255, 0, 0), RGB(0, 0, 255),"B");
-    auto zoneA = module.AddBiColorZone(0, 5, RGB(0, 0, 255), RGB(255, 0, 0), "A");
+   STR.AddSetting(Setting::Type::Trigger, nullptr, 0, "LEDMODULE");
 
+   LedModule module(GPIO_NUM_13, ALL_LED_LEN);
 
-    //auto zoneG = module.AddBiColorZone(0, 460, RGB(255, 0, 0), RGB(0, 0, 255), "ZONEGAUCHE");
-    //auto zoneD = module.AddBiColorZone(460, 460, RGB(0, 0, 255), RGB(255, 0, 0), "ZONEDROITE");
+   auto simonWin = module.AddForeColorZone(A_START, ALL_LED_LEN, RGB(0, 255, 0), "SimonWin");
+   auto simonLoose = module.AddForeColorZone(A_START, ALL_LED_LEN, RGB(255, 0, 0), "SimonLoose");
 
-    //LoadingTransition tr("LATRANSI");
-    //FadingTransition fade("FADING");
-    //SimplexTransition simplex("SIMPLEX");
-    //simplex.AddOctave(0.09, 0.09, 1.0, "OCT");
+   FadingTransition fadeSimonWin("5SimonWin");
+   FadingTransition fadeSimonLoose("6SimonLoose");
 
-    //LoadingTransition tr("LOADING");
-    //tr.AddOctave(0.01, 0.01, 1.0, "OCT");
-    //zoneG->fTransition = &simplex;
-    //zoneB->fTransition = &tr;
+   simonWin->fTransition = &fadeSimonWin;
+   simonLoose->fTransition = &fadeSimonLoose;
 
-   // zoneD->fTransition = &simplex;
+   /*auto simonA = module.AddForeColorZone(A_START, ZONE_LEN, RGB(0, 255, 0), "SimonA");
+   auto simonB = module.AddForeColorZone(B_START, ZONE_LEN, RGB(0, 255, 0), "SimonB");
 
-   BlinkingTransition bk("BLINK");
-    zoneVA->fTransition = &bk;
-    zoneVB->fTransition = &bk;
-    //zoneB->fTransition = &bk;
-    //module.AddBiColorZone(16, 15, RGB(0, 0, 255), RGB(255, 0, 0), TRANSITION_TYPE_FADING);
+   FadingTransition fadeSimonA("7SimonA");
+   FadingTransition fadeSimonB("8SimonB");
 
-    //module.AddBiColorZone(0, 31, RGB(255, 0, 0), RGB(0, 0, 255), TRANSITION_TYPE_SIMPLEX_FADE);
-    
-     while(true)
-     {
-        STR.Update();
+   simonA->fTransition = &fadeSimonA;
+   simonB->fTransition = &fadeSimonB;*/
 
-        module.Update();
+   auto baseA = module.AddForeColorZone(A_START, ZONE_LEN, RGB(0, 0, 255), "BaseA");
+   auto baseB = module.AddForeColorZone(B_START, ZONE_LEN, RGB(255, 0, 0), "BaseB");
 
-     }
+   LoadingTransition baseTransi("0BaseTransi");
+
+   baseTransi.SetRate(255);
+
+   baseA->fTransition = &baseTransi;
+   baseB->fTransition = &baseTransi;
+
+   FadingTransition fadeBaseA("1FadeBaseATransi");
+   FadingTransition fadeBaseB("2FadeBaseBTransi");
+
+   STR.AddSetting(Setting::Type::Trigger, nullptr, 0, "SetBaseLoading", [baseA, baseB, &baseTransi]() {
+      baseA->fTransition = &baseTransi;
+      baseB->fTransition = &baseTransi;
+   });
+
+   STR.AddSetting(Setting::Type::Trigger, nullptr, 0, "SetBaseFadeing",[baseA, baseB, &fadeBaseA, &fadeBaseB]() {
+      baseA->fTransition = &fadeBaseA;
+      baseB->fTransition = &fadeBaseB;
+   });
+
+   auto resetColor = module.AddBackColorZone(A_START, ALL_LED_LEN, RGB(0, 0, 0), "reset1");
+
+   LoadingTransition reset1("3Reset1Transi");
+
+   resetColor->fTransition = &reset1;
+
+   auto blinkA = module.AddBiColorZone(A_START, ZONE_LEN, RGB(0, 0, 0), RGB(0, 255, 0), "BlinkA");
+   auto blinkB = module.AddBiColorZone(B_START, ZONE_LEN, RGB(0, 255, 0), RGB(0, 0, 0), "BlinkB");
+
+   BlinkingTransition blink("4BlinkTransi");
+
+   blinkA->fTransition = &blink;
+   blinkB->fTransition = &blink;
+
+   auto blackBase = module.AddBiColorZone(A_START, ALL_LED_LEN, RGB(0, 0, 0), RGB(0, 0, 0), "blackBaseZone");
+
+   while(true)
+   {
+      STR.Update();
+
+      module.Update();
+   }
 }

@@ -34,6 +34,7 @@ class LoadingTransition : public Transition
     public:
     LoadingTransition(const char* name);
     virtual void Apply(LedModule* module, LedZone* zone);
+    void SetRate(uint8_t rate);
 
     typedef enum {
         BEGIN_END = 0,
