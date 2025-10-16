@@ -76,7 +76,12 @@ void    LedModule::_initSTR(LedZone* ledZone)
     }
 }
 
-LedZone* LedModule::AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition)
+void    LedModule::SetZoneStack(ZoneStack* zoneStack)
+{
+    fZoneStack = zoneStack;
+}
+
+LedZone* LedZone::CreateForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
@@ -88,14 +93,10 @@ LedZone* LedModule::AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB c
         .fName = newStrCpy(name)
     };
 
-    _initSTR(newZone);
-
-    fLedZones.push_back(newZone);
-
-    return fLedZones.back();
+    return newZone;
 }
 
-LedZone* LedModule::AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition)
+LedZone* LedZone::CreateBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
@@ -107,12 +108,10 @@ LedZone* LedModule::AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB c
         .fName = newStrCpy(name)
     };
 
-    fLedZones.push_back(newZone);
-    
-    return fLedZones.back();
+    return newZone;
 }
 
-LedZone* LedModule::AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, const char* name, transition_type_t transition)
+LedZone* LedZone::CreateBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, const char* name)
 {
     LedZone* newZone = new LedZone{
         .fNbLed = numLed,
@@ -123,11 +122,7 @@ LedZone* LedModule::AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB for
         .fName = newStrCpy(name)
     };
 
-    _initSTR(newZone);
-
-    fLedZones.push_back(newZone);
-
-    return fLedZones.back();
+    return newZone;
 }
 
 void    LedModule::SetLedColor(size_t i, RGB color)
@@ -152,22 +147,25 @@ RGB&    LedModule::operator[](size_t i)
 
 void    LedModule::Update()
 {
-    for (auto i = fLedZones.rbegin(); i != fLedZones.rend(); i++)
+    if (fZoneStack)
     {
-        if ((*i)->fTransition)
+        for (auto i = fZoneStack->LedZoneRBegin(); i != fZoneStack->LedZoneREnd(); i++)
         {
-            (*i)->fTransition->Apply(this, *i);
-        }
-        else if ((*i)->fMonoBack || (*i)->fBicolor)
-        {
-            for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+            if ((*i)->fTransition)
             {
-                fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
+                (*i)->fTransition->Apply(this, *i);
+            }
+            else if ((*i)->fMonoBack || (*i)->fBicolor)
+            {
+                for (auto ledIndex = 0; ledIndex < (*i)->fNbLed; ledIndex++)
+                {
+                    fLedData[ledIndex + (*i)->fStartIndex] = (*i)->fBackColor;
+                }
             }
         }
-    }
 
-    FLed.show();
+        FLed.show();
+    }
 }
 
 Transition::Transition(const char* name)
@@ -264,6 +262,11 @@ void LoadingTransition::SetRate(uint8_t rate)
     fRate.fRate = rate;
 }
 
+void LoadingTransition::SetDirection(uint8_t direction)
+{
+    fDirection = direction;
+}
+
 FadingTransition::FadingTransition(const char* name) : Transition(name)
 {
     fRate.fName = newStrCat(name, "_RATE");
@@ -328,6 +331,12 @@ void FadingTransition::Apply(LedModule* module, LedZone* zone)
     }
 }
 
+
+void FadingTransition::SetRate(uint8_t rate)
+{
+    fRate.fRate = rate;
+}
+
 SimplexTransition::SimplexTransition(const char* name) : Transition(name)
 {
     fRate.fName = newStrCat(name, "_RATE");
@@ -387,6 +396,12 @@ void    SimplexTransition::AddOctave(float x, float y, float amp, const char* na
         .amplitude = _IQ16(amp),
         .name = name
     });
+}
+
+
+void SimplexTransition::SetRate(uint8_t rate)
+{
+    fRate.fRate = rate;
 }
 
 BlinkingTransition::BlinkingTransition(const char* name) : Transition(name)
@@ -485,4 +500,35 @@ void BlinkingTransition::Apply(LedModule* module, LedZone* zone)
             (*module)[ledIndex + zone->fStartIndex] = color; 
         }
     }
+}
+
+
+void BlinkingTransition::SetRate(uint8_t rate)
+{
+    fRate.fRate = rate;
+}
+
+ZoneStack::ZoneStack(const char* name = "")
+{
+    if (fName)
+        delete[] fName;
+
+    fName = new char[strlen(name)];
+
+    strcpy(fName, name);
+}
+
+void ZoneStack::Append(LedZone* ledZone)
+{
+    fLedZones.push_back(ledZone);
+}
+
+std::reverse_iterator<std::vector<LedZone *>::iterator> ZoneStack::LedZoneRBegin()
+{
+    return fLedZones.rbegin();
+}
+
+std::reverse_iterator<std::vector<LedZone *>::iterator> ZoneStack::LedZoneREnd()
+{
+    return fLedZones.rend();
 }

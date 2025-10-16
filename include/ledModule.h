@@ -35,6 +35,7 @@ class LoadingTransition : public Transition
     LoadingTransition(const char* name);
     virtual void Apply(LedModule* module, LedZone* zone);
     void SetRate(uint8_t rate);
+    void SetDirection(uint8_t direction);
 
     typedef enum {
         BEGIN_END = 0,
@@ -54,6 +55,7 @@ class FadingTransition : public Transition
     public:
     FadingTransition(const char* name);
     virtual void Apply(LedModule* module, LedZone* zone);
+    void SetRate(uint8_t rate);
 
     private:
     FadingTransition();
@@ -74,6 +76,7 @@ class SimplexTransition : public Transition
     SimplexTransition(const char* name);
     virtual void    Apply(LedModule* module, LedZone* zone);
     void            AddOctave(float x, float y, float amp, const char* name);
+    void SetRate(uint8_t rate);
 
     enum {
         SLICE = 0,
@@ -92,6 +95,7 @@ class BlinkingTransition : public Transition
     public:
     BlinkingTransition(const char* name);
     virtual void    Apply(LedModule* module, LedZone* zone);
+    void SetRate(uint8_t rate);
 
     private:
     BlinkingTransition();
@@ -117,7 +121,26 @@ struct LedZone
     char*               fName;
 
     Transition*         fTransition = nullptr;
+
+    static LedZone*     CreateForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name);
+    static LedZone*     CreateBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name);
+    static LedZone*     CreateBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, const char* name);
     
+};
+
+class ZoneStack
+{
+    private:
+    ZoneStack();
+    std::vector<LedZone*>   fLedZones;
+    char*                   fName = nullptr;
+
+    public:
+    ZoneStack(const char* name);
+    void Append(LedZone* ledZone);
+
+    std::reverse_iterator<std::vector<LedZone *>::iterator> LedZoneRBegin();
+    std::reverse_iterator<std::vector<LedZone *>::iterator> LedZoneREnd();
 };
 
 class LedModule
@@ -131,14 +154,10 @@ class LedModule
     uint16_t      fNumLed = 0;
     gpio_num_t  fLedPin = GPIO_NUM_NC;
 
-    std::vector<LedZone*>    fLedZones;
+    ZoneStack*              fZoneStack = nullptr;
 
     public:
     LedModule(gpio_num_t ledPin, uint16_t numLed);
-
-    LedZone* AddForeColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition = TRANSITION_TYPE_LOADING);
-    LedZone* AddBackColorZone(uint16_t startIndex, uint16_t numLed, RGB color, const char* name, transition_type_t transition = TRANSITION_TYPE_LOADING);
-    LedZone* AddBiColorZone(uint16_t startIndex, uint16_t numLed, RGB foreColor, RGB backColor, const char* name, transition_type_t transition = TRANSITION_TYPE_LOADING);
 
     void    SetLedColor(size_t i, RGB color);
     RGB     GetLedColor(size_t i);
@@ -146,4 +165,5 @@ class LedModule
     RGB&    operator[](size_t i);
 
     void Update();
+    void SetZoneStack(ZoneStack* zoneStack);
 };

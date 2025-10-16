@@ -53,7 +53,7 @@ static char* newStrCat(const char* a, const char* b)
     return dst;
 }
 
-void TransitionValue::Update()
+bool TransitionValue::Update()
 {
     if (fTransitioning)
     {
@@ -97,7 +97,11 @@ void TransitionValue::Update()
             fRate = newRate;
 
         //ESP_LOGI("TR", "Rate : %d", fRate);
+
+        return true;
     }
+
+    return false;
 }
 
 void TransitionValue::InitSTR()

@@ -20,7 +20,7 @@ struct TransitionValue
 
     char*       fName = nullptr;
 
-    void                Update();
+    bool                Update();
     void                InitSTR();
 
     operator uint8_t& ();
